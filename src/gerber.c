@@ -1777,6 +1777,160 @@ parse_rs274x(
                 );
             }
             break;
+        case A2I('T', 'F'):
+            // https://www.ucamco.com/en/guest/downloads/gerber-format
+            // support for Gerber X2 FileFunction
+            // "%TF.FileFunction,"
+#define X2BUF  25 // X2 Attribute parsing buffer
+#define X2LEN  14 // X2 Attribute type len
+#define X2CLEN  5 // X2 Attribute type cmp len
+            char stdAttr[X2BUF];
+            int i;
+            for (i=0, stdAttr[i]=gerb_fgetc(fd); i<X2LEN-1 && stdAttr[i]!=EOF;) {
+                stdAttr[++i] = gerb_fgetc(fd);
+            }
+            stdAttr[X2LEN]='\0';
+            int file=strncmp(stdAttr, ".FileFunction,", X2LEN);
+            if (file==0) { // is a FileFunction attribute
+                char x2type0[X2CLEN+1]="";
+                for (i=0, x2type0[i]=gerb_fgetc(fd); i<X2CLEN-1 && x2type0[i]!=EOF;) {
+                    x2type0[++i] = gerb_fgetc(fd);
+                }
+                x2type0[X2CLEN]='\0';
+                for (i=0, stdAttr[i]=gerb_fgetc(fd); stdAttr[i]!=',' && stdAttr[i]!='*' && i<24 && stdAttr[i]!=EOF;) { // look for first comma
+                    stdAttr[++i] = gerb_fgetc(fd);
+                }
+                if (stdAttr[i]=='*') gerb_ungetc(fd); // Drillmap and FabricationDrawing are just before *%
+                stdAttr[i+1]='\0';
+                char x2type1[X2BUF]="";
+                i=0;
+                x2type1[i] = gerb_fgetc(fd);
+                x2type1[++i] = gerb_fgetc(fd);
+                gerb_ungetc(fd);
+                for (; x2type1[i-1]!='*' && x2type1[i]!='%' && i<X2BUF-3 && x2type1[i]!=EOF;) { // look for *%
+                    x2type1[i] = gerb_fgetc(fd);
+                    x2type1[++i] = gerb_fgetc(fd);
+                    gerb_ungetc(fd);
+                }
+                x2type1[i-1]='\0'; // skip *%
+                // can be 1 to 4 fields in x2type1
+                char x2type11[X2LEN]="";
+                char x2type12[X2LEN]="";
+                int d;
+                i=0;
+                for (d=0; x2type1[i]!=',' && d<X2LEN && x2type1[i]!='\0'; i++, d++) { // look for first comma
+                    x2type11[d] = x2type1[i];
+                }
+                x2type11[d]='\0';
+                if (x2type1[i]==',') i++; // skip comma
+                for (d=0; x2type1[i]!=',' && d<X2LEN && x2type1[i]!='\0'; i++, d++) { // look for first comma
+                    x2type12[d] = x2type1[i];
+                }
+                x2type12[d]='\0';
+                if (x2type1[i]==',') i++; // skip comma
+#if 0
+                char x2type13[X2LEN]="";
+                char x2type14[X2LEN]="";
+                for (d=0; x2type1[i]!=',' && d<X2LEN && x2type1[i]!='\0'; i++, d++) { // look for first comma
+                    x2type13[d] = x2type1[i];
+                }
+                x2type13[d]='\0';
+                if (x2type1[i]==',') i++; // skip comma
+                for (d=0; x2type1[i]!=',' && d<X2LEN && x2type1[i]!='\0'; i++, d++) { // look for first comma
+                    x2type14[d] = x2type1[i];
+                }
+                x2type14[d]='\0';
+#endif
+                /* here save X2 type and subtype for gerbv_open_image() */
+                if (image->x2type==NULL) image->x2type = g_new0(gerbv_x2fileAttr_t, 1);
+                image->x2type->x2name = GERBV_X2NAME_FILEFUNCTION;
+                if        (!strncmp(x2type0, "Assem", X2CLEN)) {
+                    image->x2type->x2type0 = GERBV_X2TYPE0_ASSEMBLYDRAWING;
+                    if        (!strncmp(x2type11, "Top", 3)) {
+                        image->x2type->x2type1 = GERBV_X2TYPE1_TOP;
+                        image->x2type->order =  -50;
+                    } else if (!strncmp(x2type11, "Bot", 3)) {
+                        image->x2type->x2type1 = GERBV_X2TYPE1_BOT;
+                        image->x2type->order = 1050;
+                    }
+                } else if (!strncmp(x2type0, "Compo", X2CLEN)) {
+                    image->x2type->x2type0 = GERBV_X2TYPE0_COMPONENT;
+                    if (x2type11[0]=='L') {
+                        image->x2type->layer = atoi(&x2type11[1]);
+                        if (image->x2type->layer == 1) image->x2type->order =  -40;
+                        else                           image->x2type->order = 1040;
+                    }
+                } else if (!strncmp(x2type0, "Coppe", X2CLEN)) {
+                    image->x2type->x2type0 = GERBV_X2TYPE0_COPPER;
+                    if (x2type11[0]=='L') {
+                        image->x2type->layer = atoi(&x2type11[1]);
+                        image->x2type->order = 10*image->x2type->layer;
+                        if        (!strncmp(x2type12, "Top", 3)) {
+                            image->x2type->x2type1 = GERBV_X2TYPE1_TOP;
+                        } else if (!strncmp(x2type12, "Inr", 3)) {
+                            image->x2type->x2type1 = GERBV_X2TYPE1_INR;
+                        } else if (!strncmp(x2type12, "Bot", 3)) {
+                            image->x2type->x2type1 = GERBV_X2TYPE1_BOT;
+                        }
+                    }
+                } else if (!strncmp(x2type0, "Drill", X2CLEN)) {
+                    image->x2type->x2type0 = GERBV_X2TYPE0_DRILLMAP;
+                    image->x2type->order = 1090;
+                } else if (!strncmp(x2type0, "Fabri", X2CLEN)) {
+                    image->x2type->x2type0 = GERBV_X2TYPE0_FABRICATIONDRAWING;
+                    image->x2type->order = 1120;
+                } else if (!strncmp(x2type0, "Legen", X2CLEN)) {
+                    image->x2type->x2type0 = GERBV_X2TYPE0_LEGEND;
+                    if        (!strncmp(x2type11, "Top", 3)) {
+                        image->x2type->x2type1 = GERBV_X2TYPE1_TOP;
+                        image->x2type->order =  -20;
+                    } else if (!strncmp(x2type11, "Bot", 3)) {
+                        image->x2type->x2type1 = GERBV_X2TYPE1_BOT;
+                        image->x2type->order = 1020;
+                    }
+               } else if (!strncmp(x2type0, "NonPl", X2CLEN)) {
+                    image->x2type->x2type0 = GERBV_X2TYPE0_NONPLATED;
+                    image->x2type->order = 1070;
+                } else if (!strncmp(x2type0, "Other", X2CLEN)) {
+                    image->x2type->x2type0 = GERBV_X2TYPE0_OTHERDRAWING;
+                    image->x2type->order = 1130;
+                } else if (!strncmp(x2type0, "Paste", X2CLEN)) {
+                    image->x2type->x2type0 = GERBV_X2TYPE0_PASTE;
+                    if        (!strncmp(x2type11, "Top", 3)) {
+                        image->x2type->x2type1 = GERBV_X2TYPE1_TOP;
+                        image->x2type->order =  -30;
+                    } else if (!strncmp(x2type11, "Bot", 3)) {
+                        image->x2type->x2type1 = GERBV_X2TYPE1_BOT;
+                        image->x2type->order = 1030;
+                    }
+                } else if (!strncmp(x2type0, "Plate", X2CLEN)) {
+                    image->x2type->x2type0 = GERBV_X2TYPE0_PLATED;
+                    image->x2type->order = 1060;
+                } else if (!strncmp(x2type0, "Profi", X2CLEN)) {
+                    image->x2type->x2type0 = GERBV_X2TYPE0_PROFILE;
+                    image->x2type->order = 1110;
+                    if        (!strncmp(x2type11, "NP", 2)) {
+                        image->x2type->x2type1 = GERBV_X2TYPE1_NP;
+                    } else if (!strncmp(x2type11, "P", 1)) {
+                        image->x2type->x2type1 = GERBV_X2TYPE1_P;
+                    }
+                } else if (!strncmp(x2type0, "Solde", X2CLEN)) {
+                    image->x2type->x2type0 = GERBV_X2TYPE0_SOLDERMASK;
+                    if        (!strncmp(x2type11, "Top", 3)) {
+                        image->x2type->x2type1 = GERBV_X2TYPE1_TOP;
+                        image->x2type->order =  -10;
+                    } else if (!strncmp(x2type11, "Bot", 3)) {
+                        image->x2type->x2type1 = GERBV_X2TYPE1_BOT;
+                        image->x2type->order = 1010;
+                    }
+                }
+                gerb_ungetc(fd); // needed for next parsing work
+            } else { // restore read chars
+                for (i=0; i<X2LEN-1;i++) {
+                    gerb_ungetc(fd);
+                }
+            }
+            break;
         default:
             gerbv_stats_printf(
                 error_list, GERBV_MESSAGE_ERROR, -1,

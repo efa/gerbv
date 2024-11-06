@@ -372,6 +372,37 @@ typedef enum {
     GERBV_RENDER_TYPE_MAX                 /*!< End-of-enum indicator */
 } gerbv_render_types_t;
 
+typedef enum { /* X2 Attribute: Global or Part */
+    GERBV_X2NAME_PART,               /* X2 Attribute: Part */
+    GERBV_X2NAME_FILEFUNCTION,       /* X2 Attribute: FileFunction */
+    GERBV_X2NAME_FILEPOLARITY,       /* X2 Attribute: FilePolarity */
+    GERBV_X2NAME_CREATIONDATE,       /* X2 Attribute: CreationDate */
+    GERBV_X2NAME_GENERATIONSOFTWARE, /* X2 Attribute: GenerationSoftware */
+} gerbv_x2name_t;
+
+typedef enum { /* X2 Attribute: Type of layer */
+    GERBV_X2TYPE0_ASSEMBLYDRAWING,    /* Components */
+    GERBV_X2TYPE0_COPPER,             /* Copper */
+    GERBV_X2TYPE0_PLATED,             /* Plated Holes */
+    GERBV_X2TYPE0_NONPLATED,          /* Non Plated Holes */
+    GERBV_X2TYPE0_PROFILE,            /* Board Profile */
+    GERBV_X2TYPE0_SOLDERMASK,         /* Solder Mask */
+    GERBV_X2TYPE0_LEGEND,             /* Legend */
+    GERBV_X2TYPE0_COMPONENT,          /* support enbedded components */
+    GERBV_X2TYPE0_PASTE,              /* Solder Paste */
+    GERBV_X2TYPE0_DRILLMAP,           /* Drill Map */
+    GERBV_X2TYPE0_FABRICATIONDRAWING, /* Fabrication Drawing */
+    GERBV_X2TYPE0_OTHERDRAWING,       /* Other Drawing */
+} gerbv_x2type0_t;
+
+typedef enum { /* X2 Attribute: SubType */
+    GERBV_X2TYPE1_TOP, /* Top Layer */
+    GERBV_X2TYPE1_INR, /* Inner Layer */
+    GERBV_X2TYPE1_BOT, /* Bottom Layer */
+    GERBV_X2TYPE1_NP,  /* NonPlated Edge */
+    GERBV_X2TYPE1_P,   /* Plated Edge */
+} gerbv_x2type1_t;
+
 /*
  * The following typedef's are taken directly from src/hid.h in the
  * pcb project.  The names are kept the same to make it easier to
@@ -727,6 +758,15 @@ typedef struct gerbv_image_info {
     int                  n_attr;
 } gerbv_image_info_t;
 
+typedef struct { /* store X2 Name(FileFunction), Type and Subtype */
+    gerbv_x2name_t  x2name;  /* X2 Name: FileFunction (also Part, FilePolarity, CreationDate, GenerationSoftware */
+    gerbv_x2type0_t x2type0; /* X2 FileFunction type: Copper, [Non]Plated, Profile, Soldermask, Legend, 
+                                                      Component, Paste, Drillmap, FabricationDrawing, OtherDrawing */
+    gerbv_x2type1_t x2type1; /* X2 FileFunction subtype: most has only Top/Bot, but Copper has INR */
+    uint8_t layer;           /* X2 FileFunction layer: Component and Copper has Lx */
+    int order;               /* used to store default viewing order */
+} gerbv_x2fileAttr_t;
+
 /*!  The structure used to hold a layer (RS274X, drill, or pick-and-place data) */
 typedef struct {
     gerbv_layertype_t    layertype;              /*!< the type of layer (RS274X, drill, or pick-and-place) */
@@ -739,6 +779,7 @@ typedef struct {
     gerbv_net_t*         netlist;     /*!< an array of all geometric entities in the layer */
     gerbv_stats_t*       gerbv_stats; /*!< RS274X statistics for the layer */
     gerbv_drill_stats_t* drill_stats; /*!< Excellon drill statistics for the layer */
+    gerbv_x2fileAttr_t*  x2type;                 /* store X2 FileFunction type and subtype */
 } gerbv_image_t;
 
 /*!  Holds information related to an individual layer that is part of a project */

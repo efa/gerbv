@@ -226,6 +226,17 @@ gerbv_open_layer_from_filename(gerbv_project_t* gerbvProject, const gchar* filen
 } /* gerbv_open_layer_from_filename */
 
 /* ------------------------------------------------------------------ */
+gint
+gerbv_find_x2_pos(gerbv_project_t* gerbvProject, gint idx_loaded) {
+    gint idx=gerbvProject->file[idx_loaded]->image->x2type->order;
+    int i;
+    for (i=0; i<gerbvProject->last_loaded; i++) {
+        if (idx<gerbvProject->file[i]->image->x2type->order) break;
+    }
+    return i;
+} /* gerbv_find_x2_pos */
+
+/* ------------------------------------------------------------------ */
 void
 gerbv_open_layer_from_filename_with_color(
     gerbv_project_t* gerbvProject, const gchar* filename, guint16 red, guint16 green, guint16 blue, guint16 alpha
@@ -243,6 +254,11 @@ gerbv_open_layer_from_filename_with_color(
         gerbvProject->file[idx_loaded]->color       = colorTemplate;
         gerbvProject->file[idx_loaded]->alpha       = alpha;
         dprintf("     Successfully opened file!\n");
+        if (gerbvProject->file[idx_loaded]->image->x2type!=NULL) { // is X2
+            // move new layer to the right X2 attribute position
+            gint idxFinal=gerbv_find_x2_pos(gerbvProject, idx_loaded);
+            gerbv_change_layer_order(gerbvProject, idx_loaded, idxFinal);
+        }
     }
 } /* gerbv_open_layer_from_filename_with_color */
 
